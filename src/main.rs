@@ -2,16 +2,17 @@ use std::{collections::HashMap, error::Error, sync::Arc};
 
 use axum::{
     extract::{Path, Query, State},
+    http::{HeaderMap, HeaderValue},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
-    Json, Router,
+    Form, Json, Router,
 };
 use conversation::Conversation;
-use email::{Content, Email, Endpoint, MailData, Personalization};
-use reqwest::StatusCode;
+use email::{Email, MailData};
+use reqwest::{header, StatusCode};
 use serde_json::Value;
 use sms::Sms;
-use voice::Voice;
+use voice::{Voice, VoiceData};
 
 mod conversation;
 mod email;
@@ -37,44 +38,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mail = Email::new(send_grid_api_key);
     let voice = Voice::new(twilio_account_sid, twilio_auth_token);
 
-    // let personalization = Personalization {
-    //     to: vec![Endpoint {
-    //         email: "lyerdestroyer@gmail.com".to_owned(),
-    //         name: None,
-    //     }],
-    //     cc: None,
-    //     bcc: None,
-    // };
-    // let from = Endpoint {
-    //     email: "purioandrew@gmail.com".to_owned(),
-    //     name: Some("Andrew Purio".to_owned()),
-    // };
-    // let content = Content {
-    //     type_: "text/plain".to_owned(),
-    //     value: "This is a message from me Rust service, mate.".to_owned(),
-    // };
-
-    // let body = MailData {
-    //     personalizations: vec![personalization],
-    //     from,
-    //     subject: "An email from my Rust service".to_owned(),
-    //     content: vec![content],
-    //     reply_to: None,
-    //     attachments: None,
-    // };
-
-    // let result = mail.send_mail(body).await?;
-
-    // println!("Result: {result}");
-
-    // let params = serde_json::json!({
-    //     "To": "+639280844918",
-    //     "From": "+17402008913",
-    //     "Twiml": "<Response><Say>Ahoy from Ireland</Say></Response>"
-    // });
-    // let result = voice.outgoing_call(&params).await?;
-    // println!("Result: {result}");
-
     let shared_state = Arc::new(AppState {
         conversation,
         sms,
@@ -84,6 +47,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let app = Router::new()
         .route("/chat", get(initiate_conversation))
+        .route("/chat/message", post(incoming_message))
         .route("/chat/list/:conversation_sid", get(list_messages))
         .route(
             "/chat/message/delete/:conversation_sid/:message_sid",
@@ -100,7 +64,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .route("/media/upload/:service_sid", post(upload_media))
         .route("/sms", post(create_sms_message))
+        .route("/sms/receive", post(inbound_sms_message))
         .route("/email", post(send_email))
+        .route("/voice/call", post(outgoing_call))
+        .route("/voice", post(inbound_call))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -250,6 +217,41 @@ async fn send_email(
         .expect("Failed to send email.");
 
     Ok(())
+}
+
+async fn outgoing_call(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<VoiceData>,
+) -> Result<(), AppError> {
+    let voice = &state.voice;
+    voice
+        .outgoing_call(payload)
+        .await
+        .expect("Failed to start outgoing call.");
+
+    Ok(())
+}
+
+async fn inbound_call(Form(payload): Form<HashMap<String, String>>) -> impl IntoResponse {
+    println!("Received a call from: {payload:?}\n\n");
+
+    let mut headers = HeaderMap::new();
+    let response = r#"<?xml version="1.0" encoding="UTF-8"?><Response><Say>Receiving your call!</Say></Response>"#;
+
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_str("text/xml").expect("To parse text."),
+    );
+
+    (headers, response)
+}
+
+async fn incoming_message(Form(payload): Form<HashMap<String, String>>) {
+    println!("Received a chat message from: {payload:?}\n\n");
+}
+
+async fn inbound_sms_message(Form(payload): Form<HashMap<String, String>>) {
+    println!("Received an sms message from: {payload:?}\n\n");
 }
 
 struct AppError(anyhow::Error);

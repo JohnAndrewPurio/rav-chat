@@ -1,6 +1,5 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::error::Error;
 
 const EMAIL_BASE_URL: &str = "https://api.sendgrid.com/v3/mail";
@@ -39,6 +38,7 @@ pub struct MailData {
     pub from: Endpoint,
     pub subject: String,
     pub content: Vec<Content>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<Endpoint>,
 

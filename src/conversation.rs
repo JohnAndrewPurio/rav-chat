@@ -9,6 +9,8 @@ use tokio_util::codec::{BytesCodec, FramedRead};
 const CONVERSATION_BASE_URL: &str = "https://conversations.twilio.com/v1";
 const CONVERSATION_MEDIA_URL: &str = "https://mcs.us1.twilio.com/v1";
 
+const WEBHOOK_ENABLED: &str = "X-Twilio-Webhook-Enabled";
+
 pub struct Conversation {
     client: Client,
 
@@ -66,6 +68,7 @@ impl Conversation {
             .client
             .post(url)
             .basic_auth(self.username.clone(), Some(self.password.clone()))
+            .header(WEBHOOK_ENABLED, "true")
             .form(&params)
             .basic_auth(self.username.clone(), Some(self.password.clone()))
             .send()
