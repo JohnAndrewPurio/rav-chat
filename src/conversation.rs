@@ -9,9 +9,6 @@ use tokio_util::codec::{BytesCodec, FramedRead};
 const CONVERSATION_BASE_URL: &str = "https://conversations.twilio.com/v1";
 const CONVERSATION_MEDIA_URL: &str = "https://mcs.us1.twilio.com/v1";
 
-const TWILIO_ACCOUNT_SID: &str = "TWILIO_ACCOUNT_SID";
-const TWILIO_AUTH_TOKEN: &str = "TWILIO_AUTH_TOKEN";
-
 pub struct Conversation {
     client: Client,
 
@@ -20,16 +17,11 @@ pub struct Conversation {
 }
 
 impl Conversation {
-    pub fn new() -> Self {
-        let twilio_account_sid =
-            std::env::var(TWILIO_ACCOUNT_SID).expect("Missing TWILIO_ACCOUNT_SID env");
-        let twilio_auth_token =
-            std::env::var(TWILIO_AUTH_TOKEN).expect("Missing TWILIO_AUTH_TOKEN env");
-
+    pub fn new(username: String, password: String) -> Self {
         Self {
             client: reqwest::Client::new(),
-            username: twilio_account_sid,
-            password: twilio_auth_token,
+            username,
+            password,
         }
     }
 
@@ -148,5 +140,22 @@ impl Conversation {
         Ok(result)
     }
 
-    
+    pub async fn retrieve_media(
+        &self,
+        service_sid: String,
+        media_sid: String,
+    ) -> Result<Value, Box<dyn Error>> {
+        let url = format!("{CONVERSATION_MEDIA_URL}/Services/{service_sid}/Media/{media_sid}");
+        let res = self
+            .client
+            .get(url)
+            .basic_auth(self.username.clone(), Some(self.password.clone()))
+            .send()
+            .await?;
+
+        let result = res.text().await?;
+        let result: Value = serde_json::from_str(&result)?;
+
+        Ok(result)
+    }
 }

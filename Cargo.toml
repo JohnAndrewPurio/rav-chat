@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-reqwest = { version = "0.12.8", features = ["multipart", "stream"] }
+anyhow = "1.0.89"
+axum = { version = "0.7.7", features = ["macros"] }
+new = "0.0.0"
+reqwest = { version = "0.12.8", features = ["multipart", "stream", "json"] }
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 tokio = { version = "1.40.0", features = ["rt-multi-thread", "macros", "fs"] }
