@@ -37,15 +37,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mail = Email::new(send_grid_api_key);
     let voice = Voice::new(twilio_account_sid, twilio_auth_token);
 
-    // let params = serde_json::json!({
-    //     "From": "+17402008913",
-    //     "To": "+639280844918",
-    //     "Body": "Hmmm!!!",
-    // });
-    // let result = sms.create_message(&params).await?;
-
-    // println!("Result: {result}");
-
     // let personalization = Personalization {
     //     to: vec![Endpoint {
     //         email: "lyerdestroyer@gmail.com".to_owned(),
@@ -68,7 +59,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //     from,
     //     subject: "An email from my Rust service".to_owned(),
     //     content: vec![content],
-
     //     reply_to: None,
     //     attachments: None,
     // };
@@ -83,8 +73,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //     "Twiml": "<Response><Say>Ahoy from Ireland</Say></Response>"
     // });
     // let result = voice.outgoing_call(&params).await?;
-
     // println!("Result: {result}");
+
     let shared_state = Arc::new(AppState {
         conversation,
         sms,
@@ -109,6 +99,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             get(retrieve_media),
         )
         .route("/media/upload/:service_sid", post(upload_media))
+        .route("/sms", post(create_sms_message))
+        .route("/email", post(send_email))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -231,6 +223,33 @@ async fn retrieve_media(
         .expect("Failed to retrieve media.");
 
     Ok(axum::Json(result))
+}
+
+async fn create_sms_message(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<Json<Value>, AppError> {
+    let sms = &state.sms;
+    let result = sms
+        .create_message(&payload)
+        .await
+        .expect("Failed to create sms");
+
+    Ok(Json(result))
+}
+
+async fn send_email(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MailData>,
+) -> Result<(), AppError> {
+    let email = &state.mail;
+
+    email
+        .send_mail(payload)
+        .await
+        .expect("Failed to send email.");
+
+    Ok(())
 }
 
 struct AppError(anyhow::Error);

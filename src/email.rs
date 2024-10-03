@@ -20,24 +20,16 @@ impl Email {
         }
     }
 
-    pub async fn send_mail(&self, body: MailData) -> Result<Value, Box<dyn Error>> {
-        let body = serde_json::json!(body);
-
-        println!("Body: {body}");
-
+    pub async fn send_mail(&self, body: MailData) -> Result<(), Box<dyn Error>> {
         let url = format!("{EMAIL_BASE_URL}/send");
-        let res = self
-            .client
+        self.client
             .post(url)
-            .json(&body)
             .bearer_auth(self.api_key.clone())
+            .json(&body)
             .send()
             .await?;
 
-        let result = res.text().await?;
-        let result = serde_json::from_str(&result)?;
-
-        Ok(result)
+        Ok(())
     }
 }
 
@@ -47,7 +39,6 @@ pub struct MailData {
     pub from: Endpoint,
     pub subject: String,
     pub content: Vec<Content>,
-
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<Endpoint>,
 
@@ -55,7 +46,7 @@ pub struct MailData {
     pub attachments: Option<Vec<Attachment>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Personalization {
     pub to: Vec<Endpoint>,
 
@@ -76,8 +67,9 @@ pub struct Endpoint {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Content {
-    #[serde(rename(serialize = "type"))]
-    pub type_: String,
+    #[serde(rename(serialize = "type", deserialize = "type_"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
     pub value: String,
 }
 
