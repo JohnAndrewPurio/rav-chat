@@ -37,13 +37,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mail = Email::new(send_grid_api_key);
     let voice = Voice::new(twilio_account_sid, twilio_auth_token);
 
-    // let params = serde_json::json!({
-    //     "Author": "some rando",
-    //     "Body": "Another one"
-    // });
-    // let _message = conversation.create_message("CH7ab92711322841599af2dfd59f5e9631".to_owned(), &params).await?;
-
-    // println!("Message: {message}");
     // let message_list = conversation.list_messages("CH7ab92711322841599af2dfd59f5e9631".to_owned()).await?;
     // println!("Messages: {message_list}");
 
@@ -128,10 +121,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let app = Router::new()
         .route("/chat", get(initiate_conversation))
-        .route(
-            "/chat/message/:conversation_sid",
-            post(create_message),
-        )
+        .route("/chat/list/:conversation_sid", get(list_messages))
+        .route("/chat/message/:conversation_sid", post(create_message))
         .route(
             "/chat/delete/:conversation_sid",
             delete(delete_conversation),
@@ -178,7 +169,6 @@ async fn delete_conversation(
     Ok(())
 }
 
-#[axum::debug_handler]
 async fn create_message(
     State(state): State<Arc<AppState>>,
     Path(conversation_sid): Path<String>,
@@ -191,6 +181,19 @@ async fn create_message(
         .expect("Failed to create message");
 
     Ok(axum::Json(message))
+}
+
+async fn list_messages(
+    State(state): State<Arc<AppState>>,
+    Path(conversation_sid): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    let conversation = &state.conversation;
+    let message_list = conversation
+        .list_messages(conversation_sid.to_owned())
+        .await
+        .expect("Failed to list all messages.");
+
+    Ok(axum::Json(message_list))
 }
 
 struct AppError(anyhow::Error);
