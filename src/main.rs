@@ -1,7 +1,7 @@
-use std::{error::Error, sync::Arc};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
     Json, Router,
@@ -36,33 +36,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let conversation = Conversation::new(twilio_account_sid.clone(), twilio_auth_token.clone());
     let mail = Email::new(send_grid_api_key);
     let voice = Voice::new(twilio_account_sid, twilio_auth_token);
-
-    // let message_list = conversation.list_messages("CH7ab92711322841599af2dfd59f5e9631".to_owned()).await?;
-    // println!("Messages: {message_list}");
-
-    // conversation
-    //     .delete_message(
-    //         "CH7ab92711322841599af2dfd59f5e9631".to_owned(),
-    //         "IMef8b7764ea4e4bcdb45c15d3d1438c9c".to_owned(),
-    //     )
-    //     .await?;
-    // let result = conversation
-    //     .upload_media(
-    //         "IS3ff2c2d08e3d42d7bce007de1e4e740c".to_owned(),
-    //         "/home/wsl/projects/rav-chat/R.jpg".to_owned(),
-    //         "cat.png".to_owned(),
-    //     )
-    //     .await?;
-
-    // println!("Result: {result}");
-    // let result = conversation
-    //     .retrieve_media(
-    //         "IS3ff2c2d08e3d42d7bce007de1e4e740c".to_owned(),
-    //         "ME5a2180abea1d8cc74f6690a99a0753f7".to_owned(),
-    //     )
-    //     .await?;
-
-    // println!("Result: {result}");
 
     // let params = serde_json::json!({
     //     "From": "+17402008913",
@@ -122,11 +95,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app = Router::new()
         .route("/chat", get(initiate_conversation))
         .route("/chat/list/:conversation_sid", get(list_messages))
+        .route(
+            "/chat/message/delete/:conversation_sid/:message_sid",
+            delete(delete_message),
+        )
         .route("/chat/message/:conversation_sid", post(create_message))
         .route(
             "/chat/delete/:conversation_sid",
             delete(delete_conversation),
         )
+        .route(
+            "/media/retrieve/:service_sid/:media_sid",
+            get(retrieve_media),
+        )
+        .route("/media/upload/:service_sid", post(upload_media))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -194,6 +176,61 @@ async fn list_messages(
         .expect("Failed to list all messages.");
 
     Ok(axum::Json(message_list))
+}
+
+async fn delete_message(
+    State(state): State<Arc<AppState>>,
+    Path((conversation_sid, message_sid)): Path<(String, String)>,
+) -> Result<(), AppError> {
+    let conversation = &state.conversation;
+
+    conversation
+        .delete_message(conversation_sid.to_owned(), message_sid.to_owned())
+        .await
+        .expect("Failed to delete message.");
+
+    Ok(())
+}
+
+async fn upload_media(
+    State(state): State<Arc<AppState>>,
+    Path(service_sid): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, AppError> {
+    let conversation = &state.conversation;
+
+    let file_path = match params.get("file_path") {
+        Some(p) => p,
+        None => "",
+    };
+    let file_name = match params.get("file_name") {
+        Some(n) => n,
+        None => "",
+    };
+
+    let result = conversation
+        .upload_media(
+            service_sid.to_owned(),
+            file_path.to_owned(),
+            file_name.to_owned(),
+        )
+        .await
+        .expect("Failed to upload media.");
+
+    Ok(axum::Json(result))
+}
+
+async fn retrieve_media(
+    State(state): State<Arc<AppState>>,
+    Path((service_sid, media_sid)): Path<(String, String)>,
+) -> Result<Json<Value>, AppError> {
+    let conversation = &state.conversation;
+    let result = conversation
+        .retrieve_media(service_sid.to_owned(), media_sid.to_owned())
+        .await
+        .expect("Failed to retrieve media.");
+
+    Ok(axum::Json(result))
 }
 
 struct AppError(anyhow::Error);
